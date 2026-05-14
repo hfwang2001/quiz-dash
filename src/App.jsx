@@ -1,16 +1,29 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Atom,
+  BookOpen,
   BrainCircuit,
+  Clapperboard,
   Compass,
+  Dna,
+  Flag,
   Gamepad2,
+  Globe2,
+  Landmark,
+  Mountain,
+  Music,
   Orbit,
+  Palette,
+  PawPrint,
   Play,
   Radar,
   Rocket,
   RotateCcw,
   SkipForward,
   Sparkles,
+  Trophy,
+  Apple,
+  Sigma,
   Zap
 } from 'lucide-react';
 import MultiPlayerCamera from './components/MultiPlayerCamera.jsx';
@@ -20,6 +33,24 @@ import { PLAYERS, QUESTIONS } from './questions.js';
 const ROUND_SECONDS = 8;
 const REVEAL_SECONDS = 4.5;
 const POINTS = [25, 20, 15, 15];
+const MAX_SELECTED_TYPES = 3;
+const QUESTION_TYPES = [
+  { id: 'art', label: '艺术', icon: Palette, color: '#ff6ec7', glow: 'rgba(255, 110, 199, 0.34)' },
+  { id: 'history', label: '历史', icon: Landmark, color: '#f7b955', glow: 'rgba(247, 185, 85, 0.34)' },
+  { id: 'sports', label: '体育', icon: Trophy, color: '#00e5ff', glow: 'rgba(0, 229, 255, 0.32)' },
+  { id: 'animals', label: '动物', icon: PawPrint, color: '#7dffb3', glow: 'rgba(125, 255, 179, 0.3)' },
+  { id: 'literature', label: '文学', icon: BookOpen, color: '#9f8cff', glow: 'rgba(159, 140, 255, 0.3)' },
+  { id: 'movie-tv', label: '影视', icon: Clapperboard, color: '#ff8a5b', glow: 'rgba(255, 138, 91, 0.3)' },
+  { id: 'world-culture', label: '世界文化', icon: Globe2, color: '#36d6a8', glow: 'rgba(54, 214, 168, 0.3)' },
+  { id: 'earth-science', label: '地球科学', icon: Mountain, color: '#4fc3ff', glow: 'rgba(79, 195, 255, 0.3)' },
+  { id: 'music', label: '音乐', icon: Music, color: '#ff5bca', glow: 'rgba(255, 91, 202, 0.32)' },
+  { id: 'space', label: '太空', icon: Orbit, color: '#7cb8ff', glow: 'rgba(124, 184, 255, 0.3)' },
+  { id: 'countries', label: '国家', icon: Flag, color: '#ffd166', glow: 'rgba(255, 209, 102, 0.3)' },
+  { id: 'computers-games', label: '计算机与游戏', icon: Gamepad2, color: '#00f0b5', glow: 'rgba(0, 240, 181, 0.3)' },
+  { id: 'human-biology', label: '人体生物学', icon: Dna, color: '#ff7ad9', glow: 'rgba(255, 122, 217, 0.32)' },
+  { id: 'food', label: '食物', icon: Apple, color: '#ff8f70', glow: 'rgba(255, 143, 112, 0.3)' },
+  { id: 'math', label: '数学', icon: Sigma, color: '#6fd3ff', glow: 'rgba(111, 211, 255, 0.3)' }
+];
 const KEYS = {
   q: [1, 'left'],
   w: [1, 'right'],
@@ -33,6 +64,7 @@ const KEYS = {
 
 export default function App() {
   const [playerCount, setPlayerCount] = useState(4);
+  const [selectedQuestionTypes, setSelectedQuestionTypes] = useState([]);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS);
   const [phase, setPhase] = useState('start');
@@ -198,6 +230,7 @@ export default function App() {
   function restartGame(nextCount = playerCount) {
     revealLockRef.current = false;
     setPlayerCount(nextCount);
+    setSelectedQuestionTypes([]);
     setQuestionIndex(0);
     setTimeLeft(ROUND_SECONDS);
     setPhase('start');
@@ -209,11 +242,29 @@ export default function App() {
     setShowFaceBadges(false);
   }
 
+  function toggleQuestionType(typeId) {
+    setSelectedQuestionTypes((current) => {
+      if (current.includes(typeId)) {
+        return current.filter((item) => item !== typeId);
+      }
+
+      if (current.length >= MAX_SELECTED_TYPES) {
+        return current;
+      }
+
+      return [...current, typeId];
+    });
+  }
+
   const progress = useMemo(() => `${Math.max(0, (timeLeft / ROUND_SECONDS) * 100)}%`, [timeLeft]);
   const correctOptionText = question.options[question.correct === 'left' ? 0 : 1];
   const roundRankMap = new Map(roundRanks.map((player) => [player.id, player]));
   const leftChoicePlayers = activePlayers.filter((player) => choices[player.id] === 'left');
   const rightChoicePlayers = activePlayers.filter((player) => choices[player.id] === 'right');
+  const selectedTypeLabels = QUESTION_TYPES.filter((item) => selectedQuestionTypes.includes(item.id)).map(
+    (item) => item.label
+  );
+  const isTypeLimitReached = selectedQuestionTypes.length >= MAX_SELECTED_TYPES;
 
   return (
     <main className={`game-app phase-${phase}`}>
@@ -236,16 +287,85 @@ export default function App() {
             <span className="logo-slash" />
           </div>
 
-          <button className="start-button" type="button" onClick={() => setPhase('count')}>
+          <button className="start-button" type="button" onClick={() => setPhase('category')}>
             <Play size={28} />
             开始游戏
           </button>
         </section>
       )}
 
+      {phase === 'category' && (
+        <section className="category-stage" aria-label="选择题目类型">
+          <div className="category-copy">
+            <h1>选择题目类型</h1>
+            <p>可多选，最多选择 {MAX_SELECTED_TYPES} 个知识主题。</p>
+          </div>
+
+          <div className="category-picker" aria-label="题目类型">
+            {QUESTION_TYPES.map((type) => (
+              <button
+                key={type.id}
+                className={selectedQuestionTypes.includes(type.id) ? 'is-active' : ''}
+                disabled={isTypeLimitReached && !selectedQuestionTypes.includes(type.id)}
+                onClick={() => toggleQuestionType(type.id)}
+                style={
+                  {
+                    '--category-accent': type.color,
+                    '--category-glow': type.glow
+                  }
+                }
+                type="button"
+              >
+                <span className="category-icon" aria-hidden="true">
+                  <type.icon size={30} />
+                </span>
+                <strong>{type.label}</strong>
+                <span className="category-state">
+                  {selectedQuestionTypes.includes(type.id) ? '已加入' : isTypeLimitReached ? '已满 3 项' : '点击选择'}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="category-footer">
+            <div className="category-summary">
+              <p>已选择 {selectedQuestionTypes.length}/{MAX_SELECTED_TYPES}</p>
+              {!!selectedTypeLabels.length && (
+                <div className="category-tags" aria-label="已选题型">
+                  {selectedTypeLabels.map((label) => (
+                    <span className="category-tag" key={label}>
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              className="count-next"
+              type="button"
+              onClick={() => setPhase('count')}
+              disabled={!selectedQuestionTypes.length}
+            >
+              <Play size={24} />
+              继续选择人数
+            </button>
+          </div>
+        </section>
+      )}
+
       {phase === 'count' && (
         <section className="count-stage">
           <h1>选择玩家人数</h1>
+          <div className="count-selected-topic" aria-label="已选题型">
+            <strong>已选题型</strong>
+            <div className="category-tags">
+              {selectedTypeLabels.map((label) => (
+                <span className="category-tag" key={label}>
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
           <div className="count-picker" aria-label="玩家人数">
             {[1, 2, 3, 4].map((count) => (
               <button
@@ -266,7 +386,7 @@ export default function App() {
         </section>
       )}
 
-      {phase !== 'start' && phase !== 'count' && (
+      {phase !== 'start' && phase !== 'category' && phase !== 'count' && (
         <section className={`camera-surface ${phase === 'setup' ? 'is-calibration' : 'is-side'}`}>
           <MultiPlayerCamera
             playerCount={playerCount}
@@ -308,7 +428,7 @@ export default function App() {
         </section>
       )}
 
-      {phase !== 'start' && phase !== 'count' && phase !== 'setup' && (
+      {phase !== 'start' && phase !== 'category' && phase !== 'count' && phase !== 'setup' && (
         <section className="stage-frame">
           <header className="top-corners" aria-label="游戏状态">
             <div className="round-badge">

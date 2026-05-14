@@ -106,14 +106,14 @@ export default function MultiPlayerCamera({
     try {
       setPhase('loading');
       setMessage('正在打开摄像头和姿态模型');
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: 'user',
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      },
-      audio: false
-    });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
 
       streamRef.current = stream;
       videoRef.current.srcObject = stream;
@@ -128,9 +128,10 @@ export default function MultiPlayerCamera({
       setMessage('按分割区站好，所有人双手举高来锁定位置');
       frameRef.current = window.requestAnimationFrame(readFrame);
     } catch (error) {
+      console.error('Failed to start camera', error);
       stopCamera();
       setPhase('error');
-      setMessage(error?.name === 'NotAllowedError' ? '摄像头权限没有打开' : '摄像头或模型启动失败');
+      setMessage(describeCameraError(error));
     }
   }
 
@@ -645,6 +646,19 @@ export default function MultiPlayerCamera({
       </p>
     </section>
   );
+}
+
+function describeCameraError(error) {
+  const name = error?.name || '';
+
+  if (name === 'NotAllowedError') return '摄像头权限没有打开，请在浏览器地址栏里允许摄像头';
+  if (name === 'NotReadableError') return '摄像头可能正被其他应用或标签页占用';
+  if (name === 'NotFoundError') return '没有检测到可用摄像头设备';
+  if (name === 'SecurityError') return '当前页面的浏览器安全设置阻止了摄像头';
+  if (name === 'AbortError') return '摄像头启动被中断了，请再试一次';
+  if (name === 'OverconstrainedError') return '当前摄像头分辨率约束不兼容设备';
+
+  return `摄像头或模型启动失败：${name || '未知错误'}`;
 }
 
 function drawCircle(ctx, x, y, radius, fill, stroke, withStroke = true) {

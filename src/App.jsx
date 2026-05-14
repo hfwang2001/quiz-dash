@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowLeft,
   Atom,
   BookOpen,
   BrainCircuit,
@@ -28,7 +29,8 @@ import {
 } from 'lucide-react';
 import MultiPlayerCamera from './components/MultiPlayerCamera.jsx';
 import AnimalAvatar from './components/AnimalAvatar.jsx';
-import { PLAYERS, QUESTIONS } from './questions.js';
+import { fetchQuestionImageSession, generateQuizQuestions } from './api/quiz.js';
+import { PLAYERS, QUESTIONS as FALLBACK_QUESTIONS } from './questions.js';
 
 const ROUND_SECONDS = 8;
 const REVEAL_SECONDS = 4.5;
@@ -65,6 +67,13 @@ const KEYS = {
 export default function App() {
   const [playerCount, setPlayerCount] = useState(4);
   const [selectedQuestionTypes, setSelectedQuestionTypes] = useState([]);
+  const [questions, setQuestions] = useState(FALLBACK_QUESTIONS);
+  const [generatedSelectionKey, setGeneratedSelectionKey] = useState('');
+  const [imageSessionId, setImageSessionId] = useState('');
+  const [questionImageStates, setQuestionImageStates] = useState({});
+  const [imageSessionStatus, setImageSessionStatus] = useState('idle');
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
+  const [generationError, setGenerationError] = useState('');
   const [questionIndex, setQuestionIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(ROUND_SECONDS);
   const [phase, setPhase] = useState('start');
@@ -75,8 +84,9 @@ export default function App() {
   const [calibrated, setCalibrated] = useState(false);
   const [showFaceBadges, setShowFaceBadges] = useState(false);
   const revealLockRef = useRef(false);
+  const generationRequestRef = useRef(0);
 
-  const question = QUESTIONS[questionIndex];
+  const question = questions[questionIndex] ?? questions[0] ?? FALLBACK_QUESTIONS[0];
   const activePlayers = PLAYERS.slice(0, playerCount);
   const roundNumber = questionIndex + 1;
 
@@ -134,7 +144,34 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [phase, playerCount, question.correct]);
+  }, [phase, playerCount, question?.correct]);
+
+  useEffect(() => {
+    if (!imageSessionId || imageSessionStatus === 'completed' || imageSessionStatus === 'failed') {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function pollImageSession() {
+      try {
+        const snapshot = await fetchQuestionImageSession(imageSessionId);
+        if (cancelled) return;
+        setImageSessionStatus(snapshot.status || 'running');
+        setQuestionImageStates(indexQuestionImageStates(snapshot.questions));
+      } catch (error) {
+        if (cancelled) return;
+        console.error(error);
+      }
+    }
+
+    pollImageSession();
+    const timer = window.setInterval(pollImageSession, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [imageSessionId, imageSessionStatus]);
 
   function applyChoices(nextChoices) {
     const now = performance.now();
@@ -192,7 +229,7 @@ export default function App() {
   }
 
   function nextRound() {
-    const nextIndex = (questionIndex + 1) % QUESTIONS.length;
+    const nextIndex = (questionIndex + 1) % questions.length;
     revealLockRef.current = false;
     setQuestionIndex(nextIndex);
     setTimeLeft(ROUND_SECONDS);
@@ -229,6 +266,14 @@ export default function App() {
 
   function restartGame(nextCount = playerCount) {
     revealLockRef.current = false;
+    generationRequestRef.current += 1;
+    setQuestions(FALLBACK_QUESTIONS);
+    setGeneratedSelectionKey('');
+    setImageSessionId('');
+    setQuestionImageStates({});
+    setImageSessionStatus('idle');
+    setIsGeneratingQuestions(false);
+    setGenerationError('');
     setPlayerCount(nextCount);
     setSelectedQuestionTypes([]);
     setQuestionIndex(0);
@@ -256,6 +301,78 @@ export default function App() {
     });
   }
 
+  function returnToStart() {
+    generationRequestRef.current += 1;
+    setGeneratedSelectionKey('');
+    setImageSessionId('');
+    setQuestionImageStates({});
+    setImageSessionStatus('idle');
+    setGenerationError('');
+    setIsGeneratingQuestions(false);
+    setPhase('start');
+  }
+
+  function returnToCategorySelection() {
+    generationRequestRef.current += 1;
+    setGeneratedSelectionKey('');
+    setImageSessionId('');
+    setQuestionImageStates({});
+    setImageSessionStatus('idle');
+    setGenerationError('');
+    setIsGeneratingQuestions(false);
+    setPhase('category');
+  }
+
+  function returnToCountSelection() {
+    revealLockRef.current = false;
+    setGenerationError('');
+    setPhase('count');
+    setCalibrated(false);
+    setShowFaceBadges(false);
+  }
+
+  async function generateQuestionsForSelection(typeIds) {
+    if (!typeIds.length) return;
+
+    const requestId = generationRequestRef.current + 1;
+    generationRequestRef.current = requestId;
+    setIsGeneratingQuestions(true);
+    setGenerationError('');
+    setGeneratedSelectionKey('');
+
+    try {
+      const selectedCategories = QUESTION_TYPES.filter((item) => typeIds.includes(item.id)).map((item) => item.label);
+      const result = await generateQuizQuestions({
+        categories: selectedCategories,
+        questionCount: FALLBACK_QUESTIONS.length
+      });
+
+      if (generationRequestRef.current !== requestId) return;
+      setQuestions(result.questions);
+      setGeneratedSelectionKey(createSelectionKey(typeIds));
+      setImageSessionId(result.imageSession?.sessionId || '');
+      setImageSessionStatus(result.imageSession?.status || 'idle');
+      setQuestionImageStates(indexQuestionImageStates(result.imageSession?.questions || []));
+    } catch (error) {
+      if (generationRequestRef.current !== requestId) return;
+      setGenerationError(error instanceof Error ? error.message : '题目生成失败，请稍后再试。');
+    } finally {
+      if (generationRequestRef.current !== requestId) return;
+      setIsGeneratingQuestions(false);
+    }
+  }
+
+  function handleProceedToCount() {
+    if (!selectedQuestionTypes.length) return;
+    setPhase('count');
+    generateQuestionsForSelection(selectedQuestionTypes);
+  }
+
+  function handleRetryGeneration() {
+    if (!selectedQuestionTypes.length || isGeneratingQuestions) return;
+    generateQuestionsForSelection(selectedQuestionTypes);
+  }
+
   const progress = useMemo(() => `${Math.max(0, (timeLeft / ROUND_SECONDS) * 100)}%`, [timeLeft]);
   const correctOptionText = question.options[question.correct === 'left' ? 0 : 1];
   const roundRankMap = new Map(roundRanks.map((player) => [player.id, player]));
@@ -265,6 +382,10 @@ export default function App() {
     (item) => item.label
   );
   const isTypeLimitReached = selectedQuestionTypes.length >= MAX_SELECTED_TYPES;
+  const currentSelectionKey = createSelectionKey(selectedQuestionTypes);
+  const isQuestionSetReady =
+    generatedSelectionKey === currentSelectionKey && !isGeneratingQuestions && !generationError && questions.length > 0;
+  const currentQuestionImages = questionImageStates[question.id] || null;
 
   return (
     <main className={`game-app phase-${phase}`}>
@@ -296,6 +417,10 @@ export default function App() {
 
       {phase === 'category' && (
         <section className="category-stage" aria-label="选择题目类型">
+          <button className="back-button" type="button" onClick={returnToStart} aria-label="返回开始页">
+            <ArrowLeft size={22} />
+          </button>
+
           <div className="category-copy">
             <h1>选择题目类型</h1>
             <p>可多选，最多选择 {MAX_SELECTED_TYPES} 个知识主题。</p>
@@ -343,7 +468,7 @@ export default function App() {
             <button
               className="count-next"
               type="button"
-              onClick={() => setPhase('count')}
+              onClick={handleProceedToCount}
               disabled={!selectedQuestionTypes.length}
             >
               <Play size={24} />
@@ -355,6 +480,10 @@ export default function App() {
 
       {phase === 'count' && (
         <section className="count-stage">
+          <button className="back-button" type="button" onClick={returnToCategorySelection} aria-label="返回题型选择">
+            <ArrowLeft size={22} />
+          </button>
+
           <h1>选择玩家人数</h1>
           <div className="count-selected-topic" aria-label="已选题型">
             <strong>已选题型</strong>
@@ -379,15 +508,48 @@ export default function App() {
               </button>
             ))}
           </div>
-          <button className="count-next" type="button" onClick={startCalibration}>
+          <div className="generation-status" aria-live="polite">
+            {generationError ? (
+              <p className="generation-status is-error">{generationError}</p>
+            ) : (
+              <p>
+                {isGeneratingQuestions
+                  ? '正在根据已选题型生成适合 3-6 岁儿童的题目，请先选人数…'
+                  : isQuestionSetReady
+                    ? '题目已准备好，选完人数后可以直接进入站位锁定。'
+                    : '进入本页时会自动开始生成题目。'}
+              </p>
+            )}
+          </div>
+          <button
+            className="count-next"
+            type="button"
+            onClick={isQuestionSetReady ? startCalibration : handleRetryGeneration}
+            disabled={isGeneratingQuestions}
+          >
             <Play size={24} />
-            进入站位锁定
+            {isGeneratingQuestions
+              ? '正在生成题目...'
+              : isQuestionSetReady
+                ? '进入站位锁定'
+                : '重新生成题目'}
           </button>
         </section>
       )}
 
       {phase !== 'start' && phase !== 'category' && phase !== 'count' && (
         <section className={`camera-surface ${phase === 'setup' ? 'is-calibration' : 'is-side'}`}>
+          {phase === 'setup' && (
+            <button
+              className="back-button back-button-floating"
+              type="button"
+              onClick={returnToCountSelection}
+              aria-label="返回人数选择"
+            >
+              <ArrowLeft size={22} />
+            </button>
+          )}
+
           <MultiPlayerCamera
             playerCount={playerCount}
             disabled={phase !== 'playing'}
@@ -433,7 +595,7 @@ export default function App() {
           <header className="top-corners" aria-label="游戏状态">
             <div className="round-badge">
               <strong>{roundNumber}</strong>
-              <span>of {QUESTIONS.length}</span>
+              <span>of {questions.length}</span>
             </div>
             <div className="topic-badge">{question.category}</div>
           </header>
@@ -449,6 +611,7 @@ export default function App() {
               }`}
             >
               <ChoiceAvatars players={leftChoicePlayers} />
+              <OptionImage state={currentQuestionImages?.left} label={question.options[0]} />
               <span>左手</span>
               <strong>{question.options[0]}</strong>
             </button>
@@ -458,6 +621,7 @@ export default function App() {
               }`}
             >
               <ChoiceAvatars players={rightChoicePlayers} />
+              <OptionImage state={currentQuestionImages?.right} label={question.options[1]} />
               <span>右手</span>
               <strong>{question.options[1]}</strong>
             </button>
@@ -504,6 +668,21 @@ export default function App() {
   );
 }
 
+function createSelectionKey(typeIds) {
+  return [...typeIds].sort().join('|');
+}
+
+function indexQuestionImageStates(questions) {
+  const next = {};
+  for (const question of Array.isArray(questions) ? questions : []) {
+    next[question.id] = {
+      left: question.left || null,
+      right: question.right || null
+    };
+  }
+  return next;
+}
+
 function SubjectBadge({ icon, className = '' }) {
   return (
     <span className={`subject-badge ${className}`}>
@@ -522,6 +701,32 @@ function ChoiceAvatars({ players }) {
           <AnimalAvatar type={player.avatar} color={player.color} accent={player.accent} />
         </span>
       ))}
+    </div>
+  );
+}
+
+function OptionImage({ state, label }) {
+  if (state?.status === 'ready' && state.imageUrl) {
+    return (
+      <div className="answer-image-shell" aria-hidden="true">
+        <img className="answer-image" src={state.imageUrl} alt="" />
+      </div>
+    );
+  }
+
+  const statusText =
+    state?.status === 'error'
+      ? '图片生成失败'
+      : state?.status === 'generating'
+        ? '正在生成图片'
+        : '等待生成图片';
+
+  return (
+    <div className={`answer-image-shell is-placeholder ${state?.status === 'error' ? 'is-error' : ''}`} aria-hidden="true">
+      <div className="answer-image-placeholder">
+        <span>{label}</span>
+        <strong>{statusText}</strong>
+      </div>
     </div>
   );
 }

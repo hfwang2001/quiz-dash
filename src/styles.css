@@ -1363,6 +1363,11 @@ button {
 .stage-frame {
   position: relative;
   min-height: calc(100vh - 36px);
+  display: grid;
+  grid-template-rows: auto auto auto auto auto 1fr;
+  align-content: start;
+  gap: clamp(8px, 1.1vh, 14px);
+  padding-bottom: 24px;
   overflow: hidden;
   border: 4px solid #7892aa;
   border-radius: 8px;
@@ -1436,11 +1441,11 @@ button {
 .question-board {
   position: relative;
   z-index: 2;
-  width: min(940px, calc(100% - 220px));
-  min-height: 170px;
+  width: min(1080px, calc(100% - 220px));
+  min-height: clamp(124px, 14vh, 156px);
   display: grid;
   place-items: center;
-  margin: 8px auto 0;
+  margin: 0 auto;
   text-align: center;
 }
 
@@ -1458,44 +1463,46 @@ button {
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  width: min(1040px, calc(100% - 120px));
-  margin: 10px auto 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-content: center;
+  gap: clamp(18px, 2.2vw, 30px);
+  width: min(1160px, calc(100% - 180px));
+  margin: 0 auto;
 }
 
 .answer-card {
   position: relative;
-  min-height: 300px;
+  width: 100%;
+  min-height: clamp(204px, 22vh, 228px);
   display: grid;
   align-content: start;
-  gap: 10px;
+  gap: 6px;
   border: 4px solid #8da2b7;
   border-radius: 8px;
   background: #ffffff;
   color: #425970;
   cursor: default;
-  padding: 22px 18px 18px;
+  padding: clamp(14px, 1.5vw, 18px) clamp(14px, 1.5vw, 18px) 12px;
 }
 
 .answer-card span {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 900;
   color: #7892aa;
 }
 
 .answer-card strong {
-  font-size: clamp(1.55rem, 3.2vw, 3.2rem);
+  font-size: clamp(1.3rem, 2.7vw, 2.55rem);
   line-height: 1.08;
 }
 
 .answer-image-shell {
   width: min(180px, 100%);
-  min-height: 138px;
+  min-height: 104px;
   display: grid;
   place-items: center;
   justify-self: center;
-  padding: 10px;
+  padding: 8px;
   border: 3px solid rgba(141, 162, 183, 0.34);
   border-radius: 20px;
   background:
@@ -1508,7 +1515,7 @@ button {
 
 .answer-image {
   max-width: 100%;
-  max-height: 156px;
+  max-height: 114px;
   object-fit: contain;
   image-rendering: pixelated;
   filter: drop-shadow(0 14px 18px rgba(73, 109, 145, 0.2));
@@ -1535,16 +1542,16 @@ button {
 }
 
 .answer-image-placeholder span {
-  padding: 8px 12px;
+  padding: 7px 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.82);
   color: #4a6178;
-  font-size: 1.05rem;
+  font-size: 0.96rem;
 }
 
 .answer-image-placeholder strong {
   color: #6f86a0;
-  font-size: 0.92rem;
+  font-size: 0.85rem;
   line-height: 1.35;
 }
 
@@ -1597,7 +1604,7 @@ button {
   z-index: 2;
   width: min(720px, calc(100% - 160px));
   height: 28px;
-  margin: 26px auto 10px;
+  margin: 0 auto;
   border: 3px solid #8da2b7;
   border-radius: 999px;
   overflow: hidden;
@@ -1625,15 +1632,15 @@ button {
 }
 
 .player-row {
-  position: absolute;
+  position: relative;
   z-index: 2;
-  left: 34px;
-  right: 34px;
-  bottom: 28px;
+  width: min(1120px, calc(100% - 72px));
+  margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 18px;
   align-items: end;
+  align-self: end;
 }
 
 .player-row.players-1 {
@@ -1659,21 +1666,21 @@ button {
 
 .player-desk {
   position: relative;
-  min-height: 226px;
+  min-height: 196px;
   display: grid;
-  grid-template-rows: 104px 82px 38px;
+  grid-template-rows: 88px 72px 34px;
   place-items: center;
 }
 
 .animal-avatar {
-  width: min(122px, 100%);
-  height: 108px;
+  width: min(104px, 100%);
+  height: 92px;
   filter: drop-shadow(0 4px 0 rgba(69, 89, 110, 0.12));
 }
 
 .score-plate {
   width: 100%;
-  min-height: 82px;
+  min-height: 72px;
   display: grid;
   place-items: center;
   border: 4px solid #8da2b7;
@@ -1699,7 +1706,7 @@ button {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   width: 100%;
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 .desk-actions button,
@@ -1754,12 +1761,13 @@ button {
 
 .reveal-panel,
 .setup-panel {
-  position: absolute;
+  position: relative;
   z-index: 3;
-  left: 50%;
-  bottom: 284px;
-  transform: translateX(-50%);
+  left: auto;
+  bottom: auto;
+  transform: none;
   width: min(740px, calc(100% - 120px));
+  margin: 0 auto;
   display: grid;
   gap: 4px;
   padding: 16px 22px;
@@ -2218,6 +2226,7 @@ button {
 
   .stage-frame {
     min-height: 760px;
+    grid-template-rows: auto auto auto auto auto 1fr;
   }
 
   .setup-stage {
@@ -2350,6 +2359,10 @@ button {
     width: calc(100% - 32px);
   }
 
+  .answer-lanes {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .question-board p {
     font-size: 2rem;
   }
@@ -2383,5 +2396,24 @@ button {
 
   .stage-frame {
     min-height: 900px;
+  }
+}
+
+@media (min-width: 1600px) and (min-height: 900px) {
+  .question-board {
+    width: min(1180px, calc(100% - 240px));
+  }
+
+  .answer-lanes {
+    width: min(1280px, calc(100% - 220px));
+    gap: 34px;
+  }
+
+  .answer-card {
+    min-height: 220px;
+  }
+
+  .player-row {
+    width: min(1220px, calc(100% - 90px));
   }
 }

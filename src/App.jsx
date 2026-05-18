@@ -627,14 +627,30 @@ export default function App() {
             </button>
           </section>
 
-          <section className="timer-line" aria-label="剩余时间">
-            <span style={{ width: progress }} />
-            <strong>{timeLeft}s</strong>
-          </section>
+	          <section className="timer-line" aria-label="剩余时间">
+	            <span style={{ width: progress }} />
+	            <strong>{timeLeft}s</strong>
+	          </section>
 
-          <section className={`player-row players-${playerCount}`} aria-label="玩家记分牌">
-            {activePlayers.map((player) => (
-              <PlayerDesk
+	          {phase === 'reveal' && (
+	            <section className="reveal-panel" aria-live="polite">
+	              <strong>正确答案：{correctOptionText}</strong>
+	              <div className="reveal-scores">
+	                {activePlayers.map((player) => {
+	                  const result = roundRankMap.get(player.id);
+	                  return (
+	                    <span key={player.id} className={result ? 'has-points' : ''}>
+	                      {player.name} {result ? `#${result.rank} +${result.points}` : '+0'}
+	                    </span>
+	                  );
+	                })}
+	              </div>
+	            </section>
+	          )}
+
+	          <section className={`player-row players-${playerCount}`} aria-label="玩家记分牌">
+	            {activePlayers.map((player) => (
+	              <PlayerDesk
                 key={player.id}
                 player={player}
                 score={scores[player.id]}
@@ -642,28 +658,12 @@ export default function App() {
                 correct={question.correct}
                 phase={phase}
                 rank={roundRanks.find((item) => item.id === player.id)}
-                onChoose={(answer) => phase === 'playing' && applySingleChoice(player.id, answer)}
-              />
-            ))}
-          </section>
-
-          {phase === 'reveal' && (
-            <section className="reveal-panel" aria-live="polite">
-              <strong>正确答案：{correctOptionText}</strong>
-              <div className="reveal-scores">
-                {activePlayers.map((player) => {
-                  const result = roundRankMap.get(player.id);
-                  return (
-                    <span key={player.id} className={result ? 'has-points' : ''}>
-                      {player.name} {result ? `#${result.rank} +${result.points}` : '+0'}
-                    </span>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-        </section>
-      )}
+	                onChoose={(answer) => phase === 'playing' && applySingleChoice(player.id, answer)}
+	              />
+	            ))}
+	          </section>
+	        </section>
+	      )}
     </main>
   );
 }

@@ -229,9 +229,18 @@ export default function App() {
   }
 
   function nextRound() {
-    const nextIndex = (questionIndex + 1) % questions.length;
     revealLockRef.current = false;
-    setQuestionIndex(nextIndex);
+    if (questionIndex >= questions.length - 1) {
+      setTimeLeft(0);
+      setPhase('results');
+      setChoices({});
+      setCorrectSince({});
+      setRoundRanks([]);
+      setShowFaceBadges(false);
+      return;
+    }
+
+    setQuestionIndex(questionIndex + 1);
     setTimeLeft(ROUND_SECONDS);
     setPhase('playing');
     setChoices({});
@@ -378,6 +387,19 @@ export default function App() {
   const roundRankMap = new Map(roundRanks.map((player) => [player.id, player]));
   const leftChoicePlayers = activePlayers.filter((player) => choices[player.id] === 'left');
   const rightChoicePlayers = activePlayers.filter((player) => choices[player.id] === 'right');
+  const finalRanking = useMemo(
+    () =>
+      activePlayers
+        .map((player) => ({
+          ...player,
+          score: scores[player.id] ?? 0
+        }))
+        .sort((a, b) => (b.score - a.score) || (a.id - b.id)),
+    [activePlayers, scores]
+  );
+  const topScore = finalRanking[0]?.score ?? 0;
+  const champions = finalRanking.filter((player) => player.score === topScore);
+  const championNames = champions.map((player) => player.name).join(' / ');
   const selectedTypeLabels = QUESTION_TYPES.filter((item) => selectedQuestionTypes.includes(item.id)).map(
     (item) => item.label
   );
@@ -537,7 +559,7 @@ export default function App() {
         </section>
       )}
 
-      {phase !== 'start' && phase !== 'category' && phase !== 'count' && (
+      {phase !== 'start' && phase !== 'category' && phase !== 'count' && phase !== 'results' && (
         <section className={`camera-surface ${phase === 'setup' ? 'is-calibration' : 'is-side'}`}>
           {phase === 'setup' && (
             <button
@@ -590,7 +612,7 @@ export default function App() {
         </section>
       )}
 
-      {phase !== 'start' && phase !== 'category' && phase !== 'count' && phase !== 'setup' && (
+      {phase !== 'start' && phase !== 'category' && phase !== 'count' && phase !== 'setup' && phase !== 'results' && (
         <section className="stage-frame">
           <header className="top-corners" aria-label="游戏状态">
             <div className="round-badge">
@@ -664,6 +686,51 @@ export default function App() {
 	          </section>
 	        </section>
 	      )}
+
+      {phase === 'results' && (
+        <section className="results-stage" aria-label="本局结算">
+          <div className="results-copy">
+            <p>游戏结束</p>
+            <h1>{champions.length > 1 ? '并列冠军' : '本局冠军'}</h1>
+          </div>
+
+          <section className="results-champion-card" aria-label="冠军信息">
+            <div className="results-champion-avatar">
+              <AnimalAvatar
+                type={champions[0]?.avatar || activePlayers[0]?.avatar}
+                color={champions[0]?.color || activePlayers[0]?.color}
+                accent={champions[0]?.accent || activePlayers[0]?.accent}
+              />
+            </div>
+            <strong>{championNames}</strong>
+            <span>{topScore} 分</span>
+          </section>
+
+          <section className="results-rank-list" aria-label="最终排名">
+            {finalRanking.map((player, index) => (
+              <article className={`results-rank-item ${index === 0 ? 'is-winner' : ''}`} key={player.id}>
+                <span className="results-rank-index">#{index + 1}</span>
+                <div className="results-rank-avatar">
+                  <AnimalAvatar type={player.avatar} color={player.color} accent={player.accent} />
+                </div>
+                <strong>{player.name}</strong>
+                <span className="results-rank-score">{player.score} 分</span>
+              </article>
+            ))}
+          </section>
+
+          <div className="results-actions">
+            <button className="count-next" type="button" onClick={returnToCategorySelection}>
+              <Play size={24} />
+              再来一局
+            </button>
+            <button className="count-next count-next-secondary" type="button" onClick={() => restartGame()}>
+              <ArrowLeft size={22} />
+              返回首页
+            </button>
+          </div>
+        </section>
+      )}
     </main>
   );
 }

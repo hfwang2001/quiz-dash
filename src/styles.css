@@ -36,7 +36,8 @@ button {
 }
 
 .game-app.phase-category,
-.game-app.phase-count {
+.game-app.phase-count,
+.game-app.phase-results {
   grid-template-columns: 1fr;
   place-items: center;
   padding: 0;
@@ -597,7 +598,8 @@ button {
 }
 
 .category-stage,
-.count-stage {
+.count-stage,
+.results-stage {
   position: relative;
   width: 100vw;
   min-height: 100vh;
@@ -627,17 +629,26 @@ button {
   grid-template-rows: auto auto 1fr auto;
 }
 
+.results-stage {
+  grid-template-rows: auto auto auto auto;
+  justify-items: center;
+  align-content: center;
+}
+
 .category-stage::before,
 .category-stage::after,
 .count-stage::before,
-.count-stage::after {
+.count-stage::after,
+.results-stage::before,
+.results-stage::after {
   content: "";
   position: absolute;
   pointer-events: none;
 }
 
 .category-stage::before,
-.count-stage::before {
+.count-stage::before,
+.results-stage::before {
   z-index: 0;
   inset: clamp(18px, 3vw, 36px);
   border: 2px solid rgba(0, 229, 255, 0.34);
@@ -649,7 +660,8 @@ button {
 }
 
 .category-stage::after,
-.count-stage::after {
+.count-stage::after,
+.results-stage::after {
   z-index: 0;
   left: -24%;
   right: -24%;
@@ -680,7 +692,8 @@ button {
 }
 
 .category-stage h1,
-.count-stage h1 {
+.count-stage h1,
+.results-stage h1 {
   position: relative;
   z-index: 1;
   margin: 0;
@@ -697,6 +710,161 @@ button {
     -0.035em -0.025em 0 #ff5bca,
     0 0 20px rgba(0, 229, 255, 0.32);
   animation: neonFlicker 3.1s steps(1, end) infinite;
+}
+
+.results-copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  text-align: center;
+}
+
+.results-copy p {
+  margin: 0;
+  padding: 10px 18px;
+  border: 2px solid rgba(32, 57, 76, 0.14);
+  border-radius: 999px;
+  background: rgba(250, 253, 255, 0.72);
+  color: #32526a;
+  font-size: clamp(1rem, 1.4vw, 1.2rem);
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow:
+    0 0 0 1px rgba(250, 253, 255, 0.5) inset,
+    0 0 20px rgba(0, 229, 255, 0.12);
+}
+
+.results-champion-card {
+  position: relative;
+  z-index: 1;
+  width: min(520px, calc(100vw - 56px));
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 24px 22px 22px;
+  border: 3px solid #20394c;
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(8, 24, 42, 0.96), rgba(29, 61, 82, 0.94)),
+    linear-gradient(135deg, rgba(0, 229, 255, 0.2), rgba(255, 91, 202, 0.16));
+  color: #fafdff;
+  box-shadow:
+    9px 9px 0 rgba(255, 91, 202, 0.28),
+    -9px -9px 0 rgba(0, 229, 255, 0.24),
+    0 0 34px rgba(0, 229, 255, 0.28),
+    inset 0 0 0 2px rgba(250, 253, 255, 0.14);
+}
+
+.results-champion-avatar {
+  width: 148px;
+  height: 132px;
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(0 0 20px rgba(0, 229, 255, 0.3));
+}
+
+.results-champion-avatar .animal-avatar {
+  width: 136px;
+  height: 120px;
+}
+
+.results-champion-card strong {
+  font-size: clamp(2rem, 3.2vw, 3.1rem);
+  line-height: 1;
+  text-shadow:
+    0.04em 0.04em 0 rgba(0, 229, 255, 0.72),
+    -0.03em -0.02em 0 rgba(255, 91, 202, 0.68);
+}
+
+.results-champion-card span {
+  color: #d9edf8;
+  font-size: clamp(1.05rem, 1.6vw, 1.35rem);
+  font-weight: 950;
+}
+
+.results-rank-list {
+  position: relative;
+  z-index: 1;
+  width: min(720px, calc(100vw - 56px));
+  display: grid;
+  gap: 10px;
+}
+
+.results-rank-item {
+  display: grid;
+  grid-template-columns: 76px 74px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 86px;
+  padding: 12px 18px;
+  border: 3px solid rgba(32, 57, 76, 0.16);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(250, 253, 255, 0.92), rgba(228, 246, 255, 0.84)),
+    linear-gradient(90deg, rgba(0, 229, 255, 0.12), rgba(255, 91, 202, 0.1));
+  color: #274356;
+  box-shadow:
+    0 0 0 1px rgba(250, 253, 255, 0.5) inset,
+    0 0 18px rgba(0, 229, 255, 0.1);
+}
+
+.results-rank-item.is-winner {
+  border-color: rgba(32, 57, 76, 0.28);
+  box-shadow:
+    0 0 0 1px rgba(250, 253, 255, 0.56) inset,
+    0 0 24px rgba(0, 229, 255, 0.18);
+}
+
+.results-rank-index,
+.results-rank-score {
+  font-size: 1.2rem;
+  font-weight: 950;
+}
+
+.results-rank-avatar {
+  width: 62px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+}
+
+.results-rank-avatar .animal-avatar {
+  width: 60px;
+  height: 54px;
+}
+
+.results-rank-item strong {
+  font-size: clamp(1.2rem, 1.8vw, 1.55rem);
+  line-height: 1;
+}
+
+.results-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+}
+
+.count-next-secondary {
+  background:
+    linear-gradient(145deg, rgba(250, 253, 255, 0.9), rgba(224, 245, 255, 0.78)),
+    linear-gradient(135deg, rgba(0, 229, 255, 0.16), rgba(255, 91, 202, 0.1));
+  color: #20394c;
+  text-shadow: none;
+  box-shadow:
+    6px 6px 0 rgba(255, 91, 202, 0.16),
+    -6px -6px 0 rgba(0, 229, 255, 0.14),
+    0 0 22px rgba(0, 229, 255, 0.16),
+    inset 0 0 0 2px rgba(250, 253, 255, 0.24);
+}
+
+.count-next-secondary svg {
+  filter: none;
 }
 
 .category-picker,
@@ -2246,7 +2414,8 @@ button {
   }
 
   .game-app.phase-category,
-  .game-app.phase-count {
+  .game-app.phase-count,
+  .game-app.phase-results {
     padding: 0;
   }
 
@@ -2256,14 +2425,16 @@ button {
   }
 
   .category-stage,
-  .count-stage {
+  .count-stage,
+  .results-stage {
     grid-template-rows: auto auto auto;
     align-content: center;
     padding: 30px 18px;
   }
 
   .category-stage h1,
-  .count-stage h1 {
+  .count-stage h1,
+  .results-stage h1 {
     font-size: clamp(3.1rem, 13vw, 5.4rem);
   }
 
@@ -2319,6 +2490,31 @@ button {
 
   .count-selected-topic {
     min-width: 100%;
+  }
+
+  .results-champion-card,
+  .results-rank-list {
+    width: min(100%, calc(100vw - 36px));
+  }
+
+  .results-rank-item {
+    grid-template-columns: 58px 56px 1fr;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .results-rank-score {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  .results-actions {
+    width: 100%;
+    display: grid;
+  }
+
+  .results-actions .count-next {
+    width: 100%;
   }
 
   .camera-surface.is-calibration .camera-feed {

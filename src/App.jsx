@@ -32,6 +32,9 @@ import { fetchQuestionImageSession, generateQuizQuestions } from './api/quiz.js'
 import { PLAYERS, QUESTIONS as FALLBACK_QUESTIONS } from './questions.js';
 import monsterForegroundAsset from './assets/generated/quizdash-monster-foreground.png';
 import raiseHandsGuideAsset from './assets/generated/quizdash-raise-hands-guide.png';
+import quizBgmAsset from './assets/audio/quiz_recurrent.mov';
+import tickTockSoundAsset from './assets/audio/tick_tock_clock_timer_mixkit_1045.wav';
+import roundEndSoundAsset from './assets/audio/conference_audience_clapping_mixkit_476.wav';
 
 const ROUND_SECONDS = 5;
 const REVEAL_SECONDS = 4.5;
@@ -41,9 +44,9 @@ const ARCADE_RETURN_CLOSE_MS = 560;
 const ARCADE_RETURN_HOLD_MS = 420;
 const QUIZ_ENTRY_OPEN_MS = 420;
 const ARCADE_LOADING_IMAGE = '/switch_art_asset_here/loading_screen_imagegen.png';
-const QUIZ_BGM_SRC = '/audios/quiz_recurrent.mov';
-const TICK_TOCK_SOUND_SRC = '/audios/sfx_candidates/tick_tock_clock_timer_mixkit_1045.wav';
-const ROUND_END_SOUND_SRC = '/audios/sfx_candidates/conference_audience_clapping_mixkit_476.wav';
+const QUIZ_BGM_SRC = quizBgmAsset;
+const TICK_TOCK_SOUND_SRC = tickTockSoundAsset;
+const ROUND_END_SOUND_SRC = roundEndSoundAsset;
 const CAMERA_CONSTRAINTS = {
   video: {
     facingMode: 'user',

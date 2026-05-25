@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QUIZDASH 体感版界面改进 Brief</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #2f2113;
+      --muted: #6c5843;
+      --paper: #fff6e4;
+      --paper-2: #f8e4bf;
+      --teal: #176c7b;
+      --teal-dark: #0d3841;
+      --orange: #e97819;
+      --gold: #d69625;
+      --blue: #1d8fc1;
+      --green: #5b9b3d;
+      --line: rgba(104, 76, 40, 0.22);
+      --shadow: 0 18px 48px rgba(44, 28, 12, 0.18);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.62;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 18% 10%, rgba(255, 255, 255, 0.18), transparent 28%),
+        radial-gradient(circle at 85% 0%, rgba(0, 0, 0, 0.2), transparent 34%),
+        linear-gradient(180deg, #0d5160 0%, #1f7b8b 42%, #0f4651 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mix-blend-mode: soft-light;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 36px 0 80px;
+    }
+
+    header,
+    section {
+      border: 1px solid rgba(255, 255, 255, 0.46);
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(255, 250, 239, 0.96), rgba(250, 231, 194, 0.94));
+      box-shadow: var(--shadow);
+    }
+
+    header {
+      padding: 34px;
+    }
+
+    section {
+      margin-top: 24px;
+      padding: 28px;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      line-height: 1.18;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 4vw, 4.4rem);
+      letter-spacing: 0;
+    }
+
+    h2 {
+      font-size: clamp(1.45rem, 2.3vw, 2.2rem);
+      color: #5b3212;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      color: #6a3d16;
+    }
+
+    p {
+      margin: 10px 0 0;
+    }
+
+    a {
+      color: #126c8d;
+    }
+
+    code {
+      padding: 0.1em 0.32em;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.66);
+      color: #334;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .eyebrow {
+      margin-bottom: 10px;
+      color: var(--orange);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .lede {
+      max-width: 920px;
+      color: #4b3b2c;
+      font-size: 1.12rem;
+    }
+
+    .meta-grid,
+    .screen-grid,
+    .rules-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 22px;
+    }
+
+    .meta-card,
+    .screen-card,
+    .rule-card {
+      border: 1px dashed var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.46);
+      padding: 16px;
+    }
+
+    .meta-card strong,
+    .screen-card strong,
+    .rule-card strong {
+      display: block;
+      color: #6a3d16;
+    }
+
+    .meta-card span,
+    .screen-card span,
+    .rule-card span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .callout {
+      margin-top: 20px;
+      border-left: 6px solid var(--orange);
+      border-radius: 14px;
+      background: rgba(233, 120, 25, 0.1);
+      padding: 16px 18px;
+    }
+
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .flow span {
+      border-radius: 999px;
+      background: #fffaf0;
+      border: 1px solid rgba(95, 61, 20, 0.16);
+      padding: 9px 13px;
+      color: #5c3a19;
+      font-weight: 700;
+      box-shadow: 0 6px 14px rgba(60, 32, 8, 0.08);
+    }
+
+    figure {
+      margin: 24px 0 0;
+      border: 1px solid rgba(86, 55, 23, 0.18);
+      border-radius: 20px;
+      overflow: hidden;
+      background: #fffaf0;
+      box-shadow: 0 16px 34px rgba(40, 22, 8, 0.14);
+    }
+
+    figure img {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #123f48;
+    }
+
+    figcaption {
+      padding: 15px 18px 18px;
+      color: #5c4937;
+      font-size: 0.98rem;
+    }
+
+    figcaption strong {
+      color: #5f3414;
+    }
+
+    .spec-list,
+    .priority-list {
+      margin: 16px 0 0;
+      padding-left: 1.2rem;
+    }
+
+    .spec-list li,
+    .priority-list li {
+      margin: 8px 0;
+    }
+
+    .tokens {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .token {
+      min-height: 76px;
+      border-radius: 16px;
+      padding: 12px;
+      color: #fff;
+      font-weight: 800;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.26);
+    }
+
+    .token small {
+      display: block;
+      margin-top: 5px;
+      font-weight: 700;
+      opacity: 0.88;
+    }
+
+    .swatch-teal { background: #176c7b; }
+    .swatch-teal-dark { background: #0d3841; }
+    .swatch-gold { background: #d69625; }
+    .swatch-orange { background: #e97819; }
+    .swatch-blue { background: #1d8fc1; }
+    .swatch-paper { background: #f8e4bf; color: #4e3218; }
+
+    .file-list {
+      margin-top: 16px;
+      border-collapse: collapse;
+      width: 100%;
+      overflow: hidden;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.48);
+    }
+
+    .file-list th,
+    .file-list td {
+      border-bottom: 1px solid rgba(99, 67, 35, 0.14);
+      padding: 11px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .file-list th {
+      color: #6a3d16;
+      font-size: 0.9rem;
+    }
+
+    .file-list tr:last-child td {
+      border-bottom: 0;
+    }
+
+    @media (max-width: 860px) {
+      main {
+        width: min(100% - 22px, 1180px);
+        padding-top: 18px;
+      }
+
+      header,
+      section {
+        border-radius: 18px;
+        padding: 20px;
+      }
+
+      .meta-grid,
+      .screen-grid,
+      .rules-grid,
+      .tokens {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 520px) {
+      .meta-grid,
+      .screen-grid,
+      .rules-grid,
+      .tokens {
+        grid-template-columns: 1fr;
+      }
+
+      .file-list {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">AGENT.html · quiz-dash interface brief</div>
+      <h1>QUIZDASH 体感版界面改进</h1>
+      <p class="lede">
+        这是一款体感操控类问答游戏。本文档定义现有 <code>game/quiz-dash</code> 的界面升级方向：
+        保留已有题库、玩家、相机、体感判定和计分逻辑，把当前偏科技感的 UI 改造成纸片拼贴风格的
+        儿童教育游戏界面。
+      </p>
+      <div class="meta-grid" aria-label="项目摘要">
+        <div class="meta-card">
+          <strong>目标产品</strong>
+          <span>QUIZDASH 多人体感问答</span>
+        </div>
+        <div class="meta-card">
+          <strong>主要输入</strong>
+          <span>摄像头人体姿态识别，举手或左右动作选择</span>
+        </div>
+        <div class="meta-card">
+          <strong>屏幕比例</strong>
+          <span>优先 16:9 横屏，兼容常见浏览器窗口</span>
+        </div>
+        <div class="meta-card">
+          <strong>实现边界</strong>
+          <span>界面改进，不重写 quiz-dash 游戏规则</span>
+        </div>
+      </div>
+      <div class="callout">
+        核心原则：视觉必须围绕 teal 鳞片纹理背景、暖橙怪物嘴框、奶油纸卡、虚线缝线、柔和投影和轻微暗角展开。
+        不继续使用霓虹赛博风、说明型落地页、右下角聊天浮标或与体感游戏无关的装饰控件。
+      </div>
+    </header>
+
+    <section id="visual-system">
+      <h2>视觉系统</h2>
+      <p>
+        界面应像一套可互动的纸片舞台。怪物嘴巴是主要内容容器，嘴唇上承载品牌文字，
+        嘴内展示选择卡、翻题卡、玩家视频或结算结果。所有文字必须清晰可读，中文按钮要保持大字号和高对比。
+      </p>
+      <div class="tokens" aria-label="颜色基准">
+        <div class="token swatch-teal">背景 teal<small>#176c7b</small></div>
+        <div class="token swatch-teal-dark">嘴内深色<small>#0d3841</small></div>
+        <div class="token swatch-gold">怪物橙金<small>#d69625</small></div>
+        <div class="token swatch-orange">主按钮橙<small>#e97819</small></div>
+        <div class="token swatch-blue">选项蓝<small>#1d8fc1</small></div>
+        <div class="token swatch-paper">纸卡奶油<small>#f8e4bf</small></div>
+      </div>
+      <ul class="spec-list">
+        <li>背景：青绿色鳞片或瓦片重复纹理，带纸张颗粒、边缘暗角和局部柔光。</li>
+        <li>主体：暖橙色怪物外框，三只大眼睛、圆角大嘴、厚重纸片阴影；紫色领结可作为底部识别元素。</li>
+        <li>卡片：奶油色厚边框、圆角、虚线缝线、轻微弯曲或翻页厚度，按钮使用橙、蓝、绿、紫做区分。</li>
+        <li>动效方向：卡片切换用翻牌、翻页或纸张滑动；体感准备状态用双手发光圆环、虚线检测区和状态按钮。</li>
+      </ul>
+    </section>
+
+    <section id="flow">
+      <h2>核心流程</h2>
+      <p>以现有 React phase 为基础，推荐流程如下。每个阶段都应能通过键鼠调试，也应能接入体感选择。</p>
+      <div class="flow" aria-label="游戏流程">
+        <span>题目类型选择</span>
+        <span>玩家人数选择</span>
+        <span>举手检测开始</span>
+        <span>翻卡答题</span>
+        <span>公布答案与计分</span>
+        <span>结算与再玩</span>
+      </div>
+    </section>
+
+    <section id="screen-inventory">
+      <h2>界面图定义</h2>
+      <p>
+        以下图片是本次 QUIZDASH 体感版 UI 的视觉目标。实现时应优先复刻这些图的构图、材质、光影和信息层级，
+        再按真实数据替换文字、玩家数、题目和分数。
+      </p>
+
+      <figure id="screen-topic-selection">
+        <img src="AGENT_assets/topic-selection.png" alt="QUIZDASH 题目类型选择界面，怪物嘴巴中展示艺术、科学、地理、历史、数学卡片">
+        <figcaption>
+          <strong>题目类型选择。</strong>
+          嘴唇上显示 <code>QUIZ</code>；嘴巴中间是横向题型卡片组，一张卡片一种题型，卡片包含图标和中文题型名。
+          下方橙色缝线按钮文字为 <code>选择题目类型</code>。可支持左右滑动或体感左右切换，当前卡片居中放大。
+        </figcaption>
+      </figure>
+
+      <figure id="screen-player-count">
+        <img src="AGENT_assets/player-count.png" alt="QUIZDASH 玩家人数选择界面，四张卡片分别为 1 人、2 人、3 人、4 人">
+        <figcaption>
+          <strong>玩家人数选择。</strong>
+          卡片从题型切换为 <code>1 人</code> 到 <code>4 人</code>。每张卡片用儿童头像数量表达玩家数，
+          下方按钮为 <code>开始游戏</code>。选择 4 人时后续相机区域展示四个玩家槽位。
+        </figcaption>
+      </figure>
+
+      <figure id="screen-raise-hands">
+        <img src="AGENT_assets/raise-hands-guide.png" alt="QUIZDASH 双手举高开始游戏引导界面，中央人物举起双手，双手有发光检测圆环">
+        <figcaption>
+          <strong>举手开始引导。</strong>
+          该屏以提取后的 teal 背景为底，不出现怪物主体。中间是深色圆角检测区域和卡通玩家轮廓，
+          顶部写 <code>请双手举高开始游戏</code>，副标题提示检测到动作后自动开始，底部状态为 <code>等待举手</code>。
+          检测到玩家双手举高后进入正式答题。
+        </figcaption>
+      </figure>
+
+      <figure id="screen-gameplay">
+        <img src="AGENT_assets/gameplay-question.png" alt="QUIZDASH 答题界面，嘴巴中间是翻页题目卡，下方四个玩家镜头和分数">
+        <figcaption>
+          <strong>答题主界面。</strong>
+          嘴巴中间不显示牙齿，改为多层翻牌题卡。每题只有两个答案选项：A 和 B。
+          题卡顶部显示题号，例如 <code>第 3 / 10 题</code>，右上角是 15 秒计时器，左右有翻页箭头或翻卡暗示。
+          下方固定四个玩家镜头卡，显示 <code>P1</code> 到 <code>P4</code> 和实时分数。
+        </figcaption>
+      </figure>
+
+      <figure id="screen-results">
+        <img src="AGENT_assets/results.png" alt="QUIZDASH 结算界面，嘴巴中间展示获胜玩家视频，下方有再玩一局和不玩啦按钮">
+        <figcaption>
+          <strong>结算界面。</strong>
+          嘴巴中间显示赢的玩家视频窗口，带 <code>恭喜获胜！</code>、皇冠、玩家编号和分数。
+          下方两个大按钮分别是 <code>再玩一局</code> 和 <code>不玩啦</code>。底部保留四个玩家分数摘要，赢家高亮，其余玩家弱化。
+        </figcaption>
+      </figure>
+    </section>
+
+    <section id="interaction-contract">
+      <h2>交互约定</h2>
+      <div class="rules-grid">
+        <div class="rule-card">
+          <strong>体感启动</strong>
+          <span>在准备阶段检测所有已选玩家，双手高于肩部并保持短暂稳定后自动开始。</span>
+        </div>
+        <div class="rule-card">
+          <strong>选项数量</strong>
+          <span>正式答题界面只显示 A/B 两个选项，避免体感场景中目标过多。</span>
+        </div>
+        <div class="rule-card">
+          <strong>多人镜头</strong>
+          <span>玩家数为 1 到 4；四人场景下下方显示四个等宽摄像头槽位和分数。</span>
+        </div>
+        <div class="rule-card">
+          <strong>可访问调试</strong>
+          <span>鼠标点击仍可模拟选择，便于开发和无摄像头环境测试。</span>
+        </div>
+      </div>
+      <ul class="spec-list">
+        <li>每道题切换时使用翻牌或纸张翻页动画；不要使用硬切或科技感扫描动效。</li>
+        <li>回答动作可以映射为左手选择 A、右手选择 B，或沿用现有 <code>mocapMotion.js</code> 的选择抽象。</li>
+        <li>计时结束自动进入 reveal 或下一题；结算时取分数最高玩家作为赢家视频主展示。</li>
+        <li>所有动作状态应在镜头卡或状态按钮中反馈，不额外增加教学长文案。</li>
+      </ul>
+    </section>
+
+    <section id="implementation-map">
+      <h2>实现映射</h2>
+      <p>这是已有 <code>quiz-dash</code> 的界面改进，优先替换布局和样式，尽量复用现有状态、题库和相机组件。</p>
+      <table class="file-list">
+        <thead>
+          <tr>
+            <th>文件</th>
+            <th>建议职责</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>src/App.jsx</code></td>
+            <td>保留 phase 流程；把 category、count、setup、playing、results 的 JSX 改造成本文档对应屏幕。</td>
+          </tr>
+          <tr>
+            <td><code>src/styles.css</code></td>
+            <td>建立纸片怪物舞台、teal 背景纹理、卡片、翻题、玩家镜头、结算按钮等视觉系统。</td>
+          </tr>
+          <tr>
+            <td><code>src/components/MultiPlayerCamera.jsx</code></td>
+            <td>继续提供玩家检测和镜头画面；必要时开放更适合四个玩家小卡的展示状态。</td>
+          </tr>
+          <tr>
+            <td><code>src/shared/mocapMotion.js</code></td>
+            <td>维护体感判定，支持双手举高开始和 A/B 选择手势。</td>
+          </tr>
+          <tr>
+            <td><code>src/questions.js</code></td>
+            <td>题目数据应能提供两选项模式；若现有题库为四选项，界面层只展示当前题的两个有效选项。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="priorities">
+      <h2>实施优先级</h2>
+      <ol class="priority-list">
+        <li>先搭建可复用舞台容器：teal 背景、怪物嘴框、纸卡、按钮和玩家镜头槽。</li>
+        <li>重做题目类型和玩家数选择，让视觉基调完整落地。</li>
+        <li>接入举手开始引导，保证体感游戏的第一步清晰。</li>
+        <li>把正式答题改为两选项翻卡界面，并保留四玩家实时分数。</li>
+        <li>最后完成赢家视频结算、再玩一局和不玩啦的完整闭环。</li>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>

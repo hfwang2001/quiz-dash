@@ -147,3 +147,22 @@ export function quizApiPlugin() {
     }
   };
 }
+
+export function handleQuizDashApiRequest(req, res, rootDir, mode = 'production') {
+  if ((req.url || '').startsWith('/api/questions/generate')) {
+    handleGenerateQuestions(req, res, rootDir, mode);
+    return true;
+  }
+
+  if ((req.url || '').startsWith('/api/questions/assets/status')) {
+    handleImageSessionStatus(req, res);
+    return true;
+  }
+
+  if ((req.url || '').startsWith('/generated/quiz-assets/')) {
+    handleGeneratedAsset(req, res, rootDir);
+    return true;
+  }
+
+  return false;
+}

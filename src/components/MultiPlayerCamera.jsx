@@ -15,19 +15,21 @@ const ACTION_TEXT = {
 
 const STABLE_MS = 90;
 const LOCK_STABLE_MS = 700;
-const LOCK_MATCH_LIMIT = 0.18;
-const CALIBRATION_SLOT_TOLERANCE = 0.42;
+const LOCK_MATCH_LIMIT = 0.28;
+const CALIBRATION_SLOT_TOLERANCE = 0.9;
 
 export default function MultiPlayerCamera({
   playerCount,
   disabled,
   statusText,
   autoStart,
+  initialStream,
   roundKey,
   showFaceBadges = false,
   players = [],
   onChoices,
-  onCalibrationChange
+  onCalibrationChange,
+  onPlayerViews
 }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -40,12 +42,13 @@ export default function MultiPlayerCamera({
   const lockSinceRef = useRef(0);
   const calibrationLocksRef = useRef(Array.from({ length: 4 }, () => ({ locked: false, since: 0, slot: null })));
   const lockedSlotsRef = useRef(null);
-  const autoStartTriedRef = useRef(false);
+  const startPromiseRef = useRef(null);
   const disabledRef = useRef(disabled);
   const showFaceBadgesRef = useRef(showFaceBadges);
   const playersRef = useRef(players);
   const onChoicesRef = useRef(onChoices);
   const onCalibrationChangeRef = useRef(onCalibrationChange);
+  const onPlayerViewsRef = useRef(onPlayerViews);
 
   const [phase, setPhase] = useState('idle');
   const [message, setMessage] = useState('摄像头未开启');
@@ -74,6 +77,10 @@ export default function MultiPlayerCamera({
   }, [onCalibrationChange]);
 
   useEffect(() => {
+    onPlayerViewsRef.current = onPlayerViews;
+  }, [onPlayerViews]);
+
+  useEffect(() => {
     unlockPositions();
   }, [playerCount]);
 
@@ -83,16 +90,15 @@ export default function MultiPlayerCamera({
   }, [roundKey]);
 
   useEffect(() => {
-    if (!autoStart) {
-      autoStartTriedRef.current = false;
-      return;
-    }
-
-    if (!autoStartTriedRef.current && (phase === 'idle' || phase === 'error')) {
-      autoStartTriedRef.current = true;
+    if (autoStart && (phase === 'idle' || phase === 'error')) {
       startCamera();
     }
   }, [autoStart, phase]);
+
+  useEffect(() => {
+    if (!initialStream || streamRef.current === initialStream) return;
+    startCamera(initialStream);
+  }, [initialStream]);
 
   useEffect(() => {
     return () => {
@@ -102,37 +108,50 @@ export default function MultiPlayerCamera({
     };
   }, []);
 
-  async function startCamera() {
-    try {
-      setPhase('loading');
-      setMessage('正在打开摄像头和姿态模型');
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'user',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        audio: false
-      });
+  async function startCamera(existingStream = null) {
+    if (startPromiseRef.current) return startPromiseRef.current;
+    if (streamRef.current && phase !== 'error') return Promise.resolve();
 
-      streamRef.current = stream;
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
+    const startTask = (async () => {
+      try {
+        setPhase('loading');
+        setMessage('正在打开摄像头和姿态模型');
+        const stream =
+          existingStream ||
+          (await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: 'user',
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            },
+            audio: false
+          }));
 
-      if (!landmarkerRef.current) {
-        landmarkerRef.current = await createPoseLandmarker();
+        streamRef.current = stream;
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        onPlayerViewsRef.current?.({ stream, crops: {} });
+
+        if (!landmarkerRef.current) {
+          landmarkerRef.current = await createPoseLandmarker();
+        }
+
+        resetRecognition();
+        setPhase('ready');
+        setMessage('按分割区站好，所有人双手举高来锁定位置');
+        frameRef.current = window.requestAnimationFrame(readFrame);
+      } catch (error) {
+        console.error('Failed to start camera', error);
+        stopCamera();
+        setPhase('error');
+        setMessage(describeCameraError(error));
+      } finally {
+        startPromiseRef.current = null;
       }
+    })();
 
-      resetRecognition();
-      setPhase('ready');
-      setMessage('按分割区站好，所有人双手举高来锁定位置');
-      frameRef.current = window.requestAnimationFrame(readFrame);
-    } catch (error) {
-      console.error('Failed to start camera', error);
-      stopCamera();
-      setPhase('error');
-      setMessage(describeCameraError(error));
-    }
+    startPromiseRef.current = startTask;
+    return startTask;
   }
 
   async function createPoseLandmarker() {
@@ -140,9 +159,9 @@ export default function MultiPlayerCamera({
     const common = {
       runningMode: 'VIDEO',
       numPoses: 4,
-      minPoseDetectionConfidence: 0.32,
-      minPosePresenceConfidence: 0.32,
-      minTrackingConfidence: 0.32
+      minPoseDetectionConfidence: 0.26,
+      minPosePresenceConfidence: 0.2,
+      minTrackingConfidence: 0.2
     };
 
     try {
@@ -165,6 +184,7 @@ export default function MultiPlayerCamera({
   }
 
   function stopCamera() {
+    startPromiseRef.current = null;
     window.cancelAnimationFrame(frameRef.current);
     frameRef.current = 0;
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -176,6 +196,7 @@ export default function MultiPlayerCamera({
     lockedSlotsRef.current = null;
     setLockedSlots(null);
     onCalibrationChangeRef.current?.(false);
+    onPlayerViewsRef.current?.({ stream: null, crops: {} });
     setPhase('idle');
     setMessage('摄像头未开启');
   }
@@ -223,6 +244,7 @@ export default function MultiPlayerCamera({
 
     setSeenPlayers(frames.length);
     drawPose(frames, detections);
+    publishPlayerViews(frames);
     if (lockedSlotsRef.current) {
       updateChoices(frames, now);
     }
@@ -276,7 +298,7 @@ export default function MultiPlayerCamera({
 
     const frames = slots
       .filter((slot) => slot.frame)
-      .map((slot) => ({ playerId: slot.playerId, frame: slot.frame, calibrating: true }));
+      .map((slot) => ({ playerId: slot.playerId, frame: slot.frame, detection: slot.detection, calibrating: true }));
 
     const locked = calibrationLocksRef.current.slice(0, playerCount).filter((lock) => lock.locked);
     if (locked.length === playerCount) {
@@ -288,10 +310,9 @@ export default function MultiPlayerCamera({
       setLockedSlots(lockedSlots);
       onCalibrationChangeRef.current?.(true);
       resetRecognition();
-      setMessage('位置已锁定，现在左手选左边，右手选右边');
+      setMessage('准备开始');
     } else {
-      const missing = playerCount - locked.length;
-      setMessage(`已锁定 ${locked.length}/${playerCount} 位，${missing} 位玩家还需要双手举高`);
+      setMessage('双手举高');
     }
 
     return frames;
@@ -313,7 +334,8 @@ export default function MultiPlayerCamera({
         slot.lastSeenAt = now;
         return {
           playerId: slot.playerId,
-          frame: trackersRef.current[slot.playerId - 1].update(detection.landmarks, now)
+          frame: trackersRef.current[slot.playerId - 1].update(detection.landmarks, now),
+          detection
         };
       })
       .filter(Boolean);
@@ -330,7 +352,38 @@ export default function MultiPlayerCamera({
   }
 
   function lockedMatchLimit() {
-    return Math.min(LOCK_MATCH_LIMIT, Math.max(0.085, 0.34 / playerCount));
+    return Math.min(LOCK_MATCH_LIMIT, Math.max(0.12, 0.46 / playerCount));
+  }
+
+  function publishPlayerViews(frames) {
+    const crops = {};
+    frames.forEach(({ playerId, frame }) => {
+      const crop = cropForFrame(frame);
+      if (crop) crops[playerId] = crop;
+    });
+    onPlayerViewsRef.current?.({ stream: streamRef.current, crops });
+  }
+
+  function cropForFrame(frame) {
+    const box = frame?.body?.bbox_norm;
+    if (!box) return null;
+    const padX = Math.max(0.08, (box.x1 - box.x0) * 0.55);
+    const padTop = Math.max(0.12, (box.y1 - box.y0) * 0.45);
+    const padBottom = Math.max(0.08, (box.y1 - box.y0) * 0.22);
+    const rawX0 = clamp01(box.x0 - padX);
+    const rawX1 = clamp01(box.x1 + padX);
+    const y0 = clamp01(box.y0 - padTop);
+    const y1 = clamp01(box.y1 + padBottom);
+    return {
+      x: clamp01(1 - rawX1),
+      y: y0,
+      width: Math.max(0.12, clamp01(1 - rawX0) - clamp01(1 - rawX1)),
+      height: Math.max(0.18, y1 - y0)
+    };
+  }
+
+  function clamp01(value) {
+    return Math.max(0, Math.min(1, value));
   }
 
   function updateChoices(frames, now) {
@@ -411,6 +464,8 @@ export default function MultiPlayerCamera({
       ctx.fillStyle = `hsl(${hue} 82% 96%)`;
       ctx.lineWidth = 6;
 
+      drawPlayerBox(ctx, frame, playerId, width, height, hue);
+
       POSE_EDGES.forEach(([from, to]) => {
         const a = frame.nodes[from];
         const b = frame.nodes[to];
@@ -447,6 +502,47 @@ export default function MultiPlayerCamera({
         drawFaceBadge(ctx, frame, player, width, height);
       }
     });
+  }
+
+  function drawPlayerBox(ctx, frame, playerId, width, height, hue) {
+    const crop = cropForFrame(frame);
+    if (!crop) return;
+    const x = crop.x * width;
+    const y = crop.y * height;
+    const boxWidth = crop.width * width;
+    const boxHeight = crop.height * height;
+
+    ctx.save();
+    ctx.lineWidth = Math.max(5, width * 0.0045);
+    ctx.strokeStyle = `hsl(${hue} 86% 62%)`;
+    ctx.fillStyle = `hsla(${hue} 86% 62% / 0.12)`;
+    ctx.setLineDash([]);
+    roundRect(ctx, x, y, boxWidth, boxHeight, Math.max(14, width * 0.014));
+    ctx.fill();
+    ctx.stroke();
+
+    const labelWidth = Math.max(58, width * 0.055);
+    const labelHeight = Math.max(36, height * 0.052);
+    roundRect(ctx, x + 10, Math.max(10, y - labelHeight * 0.5), labelWidth, labelHeight, labelHeight / 2);
+    ctx.fillStyle = `hsl(${hue} 86% 48%)`;
+    ctx.fill();
+    ctx.fillStyle = '#fffaf0';
+    ctx.font = `900 ${Math.max(18, height * 0.032)}px system-ui`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`P${playerId}`, x + 10 + labelWidth / 2, Math.max(10, y - labelHeight * 0.5) + labelHeight / 2);
+    ctx.restore();
+  }
+
+  function roundRect(ctx, x, y, width, height, radius) {
+    const r = Math.min(radius, width / 2, height / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + width, y, x + width, y + height, r);
+    ctx.arcTo(x + width, y + height, x, y + height, r);
+    ctx.arcTo(x, y + height, x, y, r);
+    ctx.arcTo(x, y, x + width, y, r);
+    ctx.closePath();
   }
 
   function drawFaceBadge(ctx, frame, player, width, height) {
@@ -561,6 +657,7 @@ export default function MultiPlayerCamera({
 
   const running = phase === 'ready' || phase === 'loading';
   const isLocked = Boolean(lockedSlots);
+  const showCameraPlaceholder = phase === 'idle' || phase === 'error';
 
   return (
     <section className={`camera-strip camera-${phase}`}>
@@ -615,7 +712,7 @@ export default function MultiPlayerCamera({
             ))}
           </div>
         )}
-        {phase !== 'ready' && <span className="camera-empty">Camera</span>}
+        {showCameraPlaceholder && <span className="camera-empty">Camera</span>}
       </div>
 
       <div className="camera-buttons" aria-label="摄像头控制">

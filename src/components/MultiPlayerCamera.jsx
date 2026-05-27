@@ -289,11 +289,7 @@ export default function MultiPlayerCamera({
       if (!ctx) return null;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.save();
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
       ctx.drawImage(video, partition.sourceX, 0, partition.sourceWidth, height, 0, 0, partition.sourceWidth, height);
-      ctx.restore();
 
       const result = landmarker.detectForVideo(canvas, now);
       const landmarks = bestPartitionLandmarks(result.landmarks || []);
@@ -309,7 +305,7 @@ export default function MultiPlayerCamera({
         sourceIndex: index,
         playerId: index + 1,
         rawCenterX,
-        visualX: 1 - rawCenterX,
+        visualX: rawCenterX,
         centerY,
         partition
       };
@@ -334,8 +330,8 @@ export default function MultiPlayerCamera({
   function partitionForPlayer(index, width, height) {
     const visualX0 = index / playerCount;
     const visualX1 = (index + 1) / playerCount;
-    const rawX0 = Math.max(0, Math.floor((1 - visualX1) * width));
-    const rawX1 = Math.min(width, Math.ceil((1 - visualX0) * width));
+    const rawX0 = Math.max(0, Math.floor(visualX0 * width));
+    const rawX1 = Math.min(width, Math.ceil(visualX1 * width));
     const sourceWidth = Math.max(1, rawX1 - rawX0);
 
     return {
@@ -358,7 +354,7 @@ export default function MultiPlayerCamera({
   function remapPartitionLandmarks(landmarks, partition) {
     return landmarks.map((point) => ({
       ...point,
-      x: 1 - partition.visualX0 - clamp01(point.x) * partition.visualWidthNorm,
+      x: partition.visualX0 + clamp01(point.x) * partition.visualWidthNorm,
       y: clamp01(point.y),
       z: Number.isFinite(point.z) ? point.z * partition.rawWidthNorm : point.z
     }));
@@ -471,9 +467,9 @@ export default function MultiPlayerCamera({
     const y0 = clamp01(box.y0 - padTop);
     const y1 = clamp01(box.y1 + padBottom);
     return {
-      x: clamp01(1 - rawX1),
+      x: rawX0,
       y: y0,
-      width: Math.max(0.12, clamp01(1 - rawX0) - clamp01(1 - rawX1)),
+      width: Math.max(0.12, rawX1 - rawX0),
       height: Math.max(0.18, y1 - y0)
     };
   }
@@ -569,8 +565,8 @@ export default function MultiPlayerCamera({
         const b = frame.nodes[to];
         if (!isUsable(a, 0.28) || !isUsable(b, 0.28)) return;
         ctx.beginPath();
-        ctx.moveTo((1 - a.x) * width, a.y * height);
-        ctx.lineTo((1 - b.x) * width, b.y * height);
+        ctx.moveTo(a.x * width, a.y * height);
+        ctx.lineTo(b.x * width, b.y * height);
         ctx.stroke();
       });
 
@@ -578,7 +574,7 @@ export default function MultiPlayerCamera({
         const point = frame.nodes[name];
         if (!isUsable(point, 0.28)) return;
         ctx.beginPath();
-        ctx.arc((1 - point.x) * width, point.y * height, name.includes('wrist') ? 8 : 6, 0, Math.PI * 2);
+        ctx.arc(point.x * width, point.y * height, name.includes('wrist') ? 8 : 6, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
       });
@@ -591,7 +587,7 @@ export default function MultiPlayerCamera({
         ctx.strokeStyle = 'rgba(31, 47, 69, 0.72)';
         ctx.lineWidth = 7;
         const label = `P${playerId}`;
-        const x = (1 - center[0]) * width - 24;
+        const x = center[0] * width - 24;
         const y = Math.max(44, center[1] * height - 96);
         ctx.strokeText(label, x, y);
         ctx.fillText(label, x, y);
@@ -677,7 +673,7 @@ export default function MultiPlayerCamera({
     const center = frame.body.center_norm;
     if (!anchor && !center) return;
 
-    const x = anchor ? (1 - anchor.x) * width : (1 - center[0]) * width;
+    const x = anchor ? anchor.x * width : center[0] * width;
     const y = anchor ? anchor.y * height : center[1] * height - height * 0.16;
     const radius = Math.max(20, Math.min(42, width * 0.045));
     const peekY = Math.max(radius + 10, y - radius * 0.45);

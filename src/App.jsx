@@ -112,7 +112,7 @@ export default function App() {
   );
   const [prestartedCameraStream, setPrestartedCameraStream] = useState(null);
   const [cameraPreflight, setCameraPreflight] = useState('idle');
-  const [playerViews, setPlayerViews] = useState({ stream: null, crops: {} });
+  const [playerViews, setPlayerViews] = useState({ stream: null, streams: {}, crops: {} });
   const revealLockRef = useRef(false);
   const generationRequestRef = useRef(0);
   const cameraRequestRef = useRef(0);
@@ -896,7 +896,7 @@ export default function App() {
                     correct={question.correct}
                     phase={phase}
                     rank={roundRanks.find((item) => item.id === player.id)}
-                    stream={playerViews.stream}
+                    stream={playerViews.streams?.[player.id] || playerViews.stream}
                     crop={playerViews.crops[player.id]}
                     onChoose={(answer) => phase === 'playing' && applySingleChoice(player.id, answer)}
                   />

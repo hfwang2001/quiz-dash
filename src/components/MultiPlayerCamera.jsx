@@ -15,8 +15,6 @@ const ACTION_TEXT = {
 
 const STABLE_MS = 90;
 const LOCK_STABLE_MS = 700;
-const LOCK_MATCH_LIMIT = 0.28;
-const CALIBRATION_SLOT_TOLERANCE = 0.9;
 
 export default function MultiPlayerCamera({
   playerCount,
@@ -33,8 +31,11 @@ export default function MultiPlayerCamera({
 }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const partitionCanvasesRef = useRef([]);
+  const partitionStreamsRef = useRef([]);
   const streamRef = useRef(null);
-  const landmarkerRef = useRef(null);
+  const visionRef = useRef(null);
+  const landmarkersRef = useRef([]);
   const frameRef = useRef(0);
   const trackersRef = useRef(Array.from({ length: 4 }, () => createMotionTracker({ smoothing: 0.52 })));
   const candidateRef = useRef(Array.from({ length: 4 }, () => ({ action: null, since: 0 })));
@@ -82,6 +83,13 @@ export default function MultiPlayerCamera({
 
   useEffect(() => {
     unlockPositions();
+    if (streamRef.current) {
+      ensurePoseLandmarkers(playerCount).catch((error) => {
+        console.error('Failed to resize pose landmarkers', error);
+        setPhase('error');
+        setMessage(describeCameraError(error));
+      });
+    }
   }, [playerCount]);
 
   useEffect(() => {
@@ -103,8 +111,8 @@ export default function MultiPlayerCamera({
   useEffect(() => {
     return () => {
       stopCamera();
-      landmarkerRef.current?.close?.();
-      landmarkerRef.current = null;
+      closePoseLandmarkers();
+      visionRef.current = null;
     };
   }, []);
 
@@ -130,11 +138,9 @@ export default function MultiPlayerCamera({
         streamRef.current = stream;
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
-        onPlayerViewsRef.current?.({ stream, crops: {} });
+        onPlayerViewsRef.current?.({ stream, streams: {}, crops: {} });
 
-        if (!landmarkerRef.current) {
-          landmarkerRef.current = await createPoseLandmarker();
-        }
+        await ensurePoseLandmarkers(playerCount);
 
         resetRecognition();
         setPhase('ready');
@@ -154,11 +160,25 @@ export default function MultiPlayerCamera({
     return startTask;
   }
 
-  async function createPoseLandmarker() {
-    const vision = await FilesetResolver.forVisionTasks(WASM_URL);
+  async function ensurePoseLandmarkers(count) {
+    if (!visionRef.current) {
+      visionRef.current = await FilesetResolver.forVisionTasks(WASM_URL);
+    }
+
+    landmarkersRef.current.slice(count).forEach((landmarker) => landmarker?.close?.());
+    const nextLandmarkers = landmarkersRef.current.slice(0, count);
+    for (let index = 0; index < count; index += 1) {
+      if (!nextLandmarkers[index]) {
+        nextLandmarkers[index] = await createPoseLandmarker(visionRef.current);
+      }
+    }
+    landmarkersRef.current = nextLandmarkers;
+  }
+
+  async function createPoseLandmarker(vision) {
     const common = {
       runningMode: 'VIDEO',
-      numPoses: 4,
+      numPoses: 1,
       minPoseDetectionConfidence: 0.26,
       minPosePresenceConfidence: 0.2,
       minTrackingConfidence: 0.2
@@ -169,7 +189,7 @@ export default function MultiPlayerCamera({
         ...common,
         baseOptions: {
           modelAssetPath: POSE_MODEL_URL,
-          delegate: 'GPU'
+          delegate: 'CPU'
         }
       });
     } catch {
@@ -183,12 +203,22 @@ export default function MultiPlayerCamera({
     }
   }
 
+  function closePoseLandmarkers() {
+    landmarkersRef.current.forEach((landmarker) => landmarker?.close?.());
+    landmarkersRef.current = [];
+  }
+
   function stopCamera() {
     startPromiseRef.current = null;
     window.cancelAnimationFrame(frameRef.current);
     frameRef.current = 0;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    partitionStreamsRef.current.forEach((stream) => {
+      stream?.getTracks?.().forEach((track) => track.stop());
+    });
+    partitionStreamsRef.current = [];
+    partitionCanvasesRef.current = [];
     if (videoRef.current) videoRef.current.srcObject = null;
     clearCanvas();
     setSeenPlayers(0);
@@ -196,7 +226,7 @@ export default function MultiPlayerCamera({
     lockedSlotsRef.current = null;
     setLockedSlots(null);
     onCalibrationChangeRef.current?.(false);
-    onPlayerViewsRef.current?.({ stream: null, crops: {} });
+    onPlayerViewsRef.current?.({ stream: null, streams: {}, crops: {} });
     setPhase('idle');
     setMessage('摄像头未开启');
   }
@@ -223,20 +253,13 @@ export default function MultiPlayerCamera({
 
   function readFrame(now) {
     const video = videoRef.current;
-    const landmarker = landmarkerRef.current;
-    if (!video || !landmarker || video.readyState < 2) {
+    const landmarkers = landmarkersRef.current;
+    if (!video || landmarkers.length < playerCount || video.readyState < 2) {
       frameRef.current = window.requestAnimationFrame(readFrame);
       return;
     }
 
-    const result = landmarker.detectForVideo(video, now);
-    const detections = (result.landmarks || [])
-      .map((landmarks, index) => {
-        const rawCenterX = centerXFor(landmarks);
-        const centerY = centerYFor(landmarks);
-        return { landmarks, sourceIndex: index, rawCenterX, visualX: 1 - rawCenterX, centerY };
-      })
-      .filter((item) => Number.isFinite(item.rawCenterX) && Number.isFinite(item.centerY));
+    const detections = detectPartitionedPoses(video, landmarkers, now);
 
     const frames = lockedSlotsRef.current
       ? framesFromLockedSlots(detections, now)
@@ -251,24 +274,104 @@ export default function MultiPlayerCamera({
     frameRef.current = window.requestAnimationFrame(readFrame);
   }
 
+  function detectPartitionedPoses(video, landmarkers, now) {
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+    if (!width || !height || !playerCount) return [];
+
+    return Array.from({ length: playerCount }, (_, index) => {
+      const partition = partitionForPlayer(index, width, height);
+      const landmarker = landmarkers[index];
+      if (!landmarker) return null;
+
+      const canvas = getPartitionCanvas(index, partition.sourceWidth, height);
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return null;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, partition.sourceX, 0, partition.sourceWidth, height, 0, 0, partition.sourceWidth, height);
+      ctx.restore();
+
+      const result = landmarker.detectForVideo(canvas, now);
+      const landmarks = bestPartitionLandmarks(result.landmarks || []);
+      if (!landmarks) return null;
+
+      const remappedLandmarks = remapPartitionLandmarks(landmarks, partition);
+      const rawCenterX = centerXFor(remappedLandmarks);
+      const centerY = centerYFor(remappedLandmarks);
+      if (!Number.isFinite(rawCenterX) || !Number.isFinite(centerY)) return null;
+
+      return {
+        landmarks: remappedLandmarks,
+        sourceIndex: index,
+        playerId: index + 1,
+        rawCenterX,
+        visualX: 1 - rawCenterX,
+        centerY,
+        partition
+      };
+    }).filter(Boolean);
+  }
+
+  function getPartitionCanvas(index, width, height) {
+    if (!partitionCanvasesRef.current[index]) {
+      partitionCanvasesRef.current[index] = document.createElement('canvas');
+    }
+    const canvas = partitionCanvasesRef.current[index];
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    if (!partitionStreamsRef.current[index] && typeof canvas.captureStream === 'function') {
+      partitionStreamsRef.current[index] = canvas.captureStream(24);
+    }
+    return canvas;
+  }
+
+  function partitionForPlayer(index, width, height) {
+    const visualX0 = index / playerCount;
+    const visualX1 = (index + 1) / playerCount;
+    const rawX0 = Math.max(0, Math.floor((1 - visualX1) * width));
+    const rawX1 = Math.min(width, Math.ceil((1 - visualX0) * width));
+    const sourceWidth = Math.max(1, rawX1 - rawX0);
+
+    return {
+      playerId: index + 1,
+      visualX0,
+      visualX1,
+      sourceX: rawX0,
+      sourceWidth,
+      sourceHeight: height,
+      visualWidthNorm: visualX1 - visualX0,
+      rawX0Norm: rawX0 / width,
+      rawWidthNorm: sourceWidth / width
+    };
+  }
+
+  function bestPartitionLandmarks(landmarkGroups) {
+    return landmarkGroups[0] || null;
+  }
+
+  function remapPartitionLandmarks(landmarks, partition) {
+    return landmarks.map((point) => ({
+      ...point,
+      x: 1 - partition.visualX0 - clamp01(point.x) * partition.visualWidthNorm,
+      y: clamp01(point.y),
+      z: Number.isFinite(point.z) ? point.z * partition.rawWidthNorm : point.z
+    }));
+  }
+
   function framesFromCalibration(detections, now) {
     const slots = Array.from({ length: playerCount }, (_, index) => ({
       playerId: index + 1,
       x0: index / playerCount,
       x1: (index + 1) / playerCount,
       centerX: (index + 0.5) / playerCount,
-      detection: null
+      detection: detections.find((detection) => detection.playerId === index + 1) || null
     }));
-
-    const assignments = bestAssignment(
-      slots,
-      detections,
-      (slot, detection) => Math.abs(detection.visualX - slot.centerX),
-      slotTolerance()
-    );
-    assignments.forEach(({ slot, detection }) => {
-      slot.detection = detection;
-    });
 
     const readySlots = slots.filter((slot) => {
       if (!slot.detection) return false;
@@ -319,15 +422,10 @@ export default function MultiPlayerCamera({
   }
 
   function framesFromLockedSlots(detections, now) {
-    const assignments = bestAssignment(
-      lockedSlotsRef.current,
-      detections,
-      (slot, detection) => lockedMatchCost(slot, detection),
-      lockedMatchLimit()
-    );
-
-    return assignments
-      .map(({ slot, detection }) => {
+    return lockedSlotsRef.current
+      .map((slot) => {
+        const detection = detections.find((item) => item.playerId === slot.playerId);
+        if (!detection) return null;
         slot.rawCenterX = blend(slot.rawCenterX, detection.rawCenterX, 0.08);
         slot.visualX = blend(slot.visualX, detection.visualX, 0.08);
         slot.centerY = blend(slot.centerY, detection.centerY, 0.05);
@@ -341,27 +439,25 @@ export default function MultiPlayerCamera({
       .filter(Boolean);
   }
 
-  function lockedMatchCost(slot, detection) {
-    const xCost = Math.abs(detection.visualX - slot.visualX);
-    const yCost = Math.abs(detection.centerY - slot.centerY) * 0.35;
-    return xCost + yCost;
-  }
-
-  function slotTolerance() {
-    return (1 / playerCount) * CALIBRATION_SLOT_TOLERANCE;
-  }
-
-  function lockedMatchLimit() {
-    return Math.min(LOCK_MATCH_LIMIT, Math.max(0.12, 0.46 / playerCount));
-  }
-
   function publishPlayerViews(frames) {
+    const streams = {};
     const crops = {};
+    for (let index = 0; index < playerCount; index += 1) {
+      const playerId = index + 1;
+      const stream = partitionStreamsRef.current[index];
+      if (!stream) continue;
+      streams[playerId] = stream;
+      crops[playerId] = { x: 0, y: 0, width: 1, height: 1 };
+    }
+
     frames.forEach(({ playerId, frame }) => {
+      if (crops[playerId]) return;
       const crop = cropForFrame(frame);
-      if (crop) crops[playerId] = crop;
+      if (crop) {
+        crops[playerId] = crop;
+      }
     });
-    onPlayerViewsRef.current?.({ stream: streamRef.current, crops });
+    onPlayerViewsRef.current?.({ stream: streamRef.current, streams, crops });
   }
 
   function cropForFrame(frame) {
@@ -457,15 +553,17 @@ export default function MultiPlayerCamera({
     ctx.lineJoin = 'round';
     drawSlotGuide(ctx, width, height, detections);
 
-    frames.forEach(({ playerId, frame }) => {
+    frames.forEach(({ playerId, frame, detection }) => {
       const player = playersRef.current.find((item) => item.id === playerId);
       const hue = [36, 205, 350, 225][playerId - 1];
       ctx.strokeStyle = `hsl(${hue} 72% 58%)`;
       ctx.fillStyle = `hsl(${hue} 82% 96%)`;
       ctx.lineWidth = 6;
 
-      drawPlayerBox(ctx, frame, playerId, width, height, hue);
+      drawPlayerBox(ctx, frame, playerId, width, height, hue, detection?.partition);
 
+      ctx.save();
+      clipToPartition(ctx, detection?.partition, width, height);
       POSE_EDGES.forEach(([from, to]) => {
         const a = frame.nodes[from];
         const b = frame.nodes[to];
@@ -484,6 +582,7 @@ export default function MultiPlayerCamera({
         ctx.fill();
         ctx.stroke();
       });
+      ctx.restore();
 
       const center = frame.body.center_norm;
       if (center) {
@@ -504,13 +603,10 @@ export default function MultiPlayerCamera({
     });
   }
 
-  function drawPlayerBox(ctx, frame, playerId, width, height, hue) {
-    const crop = cropForFrame(frame);
-    if (!crop) return;
-    const x = crop.x * width;
-    const y = crop.y * height;
-    const boxWidth = crop.width * width;
-    const boxHeight = crop.height * height;
+  function drawPlayerBox(ctx, frame, playerId, width, height, hue, partition) {
+    const box = partitionBox(partition, width, height) || cropBoxForFrame(frame, width, height);
+    if (!box) return;
+    const { x, y, width: boxWidth, height: boxHeight } = box;
 
     ctx.save();
     ctx.lineWidth = Math.max(5, width * 0.0045);
@@ -532,6 +628,37 @@ export default function MultiPlayerCamera({
     ctx.textBaseline = 'middle';
     ctx.fillText(`P${playerId}`, x + 10 + labelWidth / 2, Math.max(10, y - labelHeight * 0.5) + labelHeight / 2);
     ctx.restore();
+  }
+
+  function clipToPartition(ctx, partition, width, height) {
+    const box = partitionBox(partition, width, height);
+    if (!box) return;
+    ctx.beginPath();
+    ctx.rect(box.x, 0, box.width, height);
+    ctx.clip();
+  }
+
+  function partitionBox(partition, width, height) {
+    if (!partition) return null;
+    const x = partition.visualX0 * width;
+    const boxWidth = Math.max(1, partition.visualWidthNorm * width);
+    return {
+      x,
+      y: 7,
+      width: boxWidth,
+      height: height - 14
+    };
+  }
+
+  function cropBoxForFrame(frame, width, height) {
+    const crop = cropForFrame(frame);
+    if (!crop) return null;
+    return {
+      x: crop.x * width,
+      y: crop.y * height,
+      width: crop.width * width,
+      height: crop.height * height
+    };
   }
 
   function roundRect(ctx, x, y, width, height, radius) {
@@ -778,51 +905,6 @@ function drawEar(ctx, x, y, radius, fill, stroke) {
   ctx.fill();
   ctx.stroke();
   ctx.restore();
-}
-
-function bestAssignment(slots, detections, costFor, maxCost) {
-  if (!slots?.length || !detections?.length) return [];
-
-  const candidates = slots.map((slot) =>
-    detections
-      .map((detection, detectionIndex) => ({
-        slot,
-        detection,
-        detectionIndex,
-        cost: costFor(slot, detection)
-      }))
-      .filter((item) => Number.isFinite(item.cost) && item.cost <= maxCost)
-      .sort((a, b) => a.cost - b.cost)
-  );
-
-  let best = { cost: Number.POSITIVE_INFINITY, items: [] };
-
-  function search(slotIndex, used, items, totalCost) {
-    if (totalCost >= best.cost) return;
-    if (slotIndex >= slots.length) {
-      const missingPenalty = (slots.length - items.length) * maxCost * 2.5;
-      const finalCost = totalCost + missingPenalty;
-      if (
-        items.length > best.items.length ||
-        (items.length === best.items.length && finalCost < best.cost)
-      ) {
-        best = { cost: finalCost, items };
-      }
-      return;
-    }
-
-    candidates[slotIndex].forEach((candidate) => {
-      if (used.has(candidate.detectionIndex)) return;
-      used.add(candidate.detectionIndex);
-      search(slotIndex + 1, used, [...items, candidate], totalCost + candidate.cost);
-      used.delete(candidate.detectionIndex);
-    });
-
-    search(slotIndex + 1, used, items, totalCost + maxCost * 1.4);
-  }
-
-  search(0, new Set(), [], 0);
-  return best.items;
 }
 
 function blend(previous, current, amount) {

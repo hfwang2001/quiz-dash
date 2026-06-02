@@ -5,7 +5,7 @@ import { classifyHandRaise, createMotionTracker, isUsable, POSE_EDGES } from '..
 
 const assetBaseUrl = new URL(import.meta.env.BASE_URL || './', window.location.href);
 const WASM_URL = new URL('mediapipe/wasm', assetBaseUrl).toString().replace(/\/$/, '');
-const POSE_MODEL_URL = new URL('mediapipe/models/pose_landmarker_full.task', assetBaseUrl).toString();
+const POSE_MODEL_URL = new URL('mediapipe/models/pose_landmarker_full_v2.task', assetBaseUrl).toString();
 
 const ACTION_TEXT = {
   left: '左手',
@@ -140,7 +140,14 @@ export default function MultiPlayerCamera({
         setMessage('按分割区站好，所有人双手举高来锁定位置');
         frameRef.current = window.requestAnimationFrame(readFrame);
       } catch (error) {
-        console.error('Failed to start camera', error);
+        console.error('Failed to start camera', {
+          error,
+          message: error?.message,
+          name: error?.name,
+          stack: error?.stack,
+          wasmUrl: WASM_URL,
+          modelUrl: POSE_MODEL_URL
+        });
         stopCamera();
         setPhase('error');
         setMessage(describeCameraError(error));
@@ -171,14 +178,30 @@ export default function MultiPlayerCamera({
           delegate: 'GPU'
         }
       });
-    } catch {
-      return PoseLandmarker.createFromOptions(vision, {
-        ...common,
-        baseOptions: {
-          modelAssetPath: POSE_MODEL_URL,
-          delegate: 'CPU'
-        }
+    } catch (gpuError) {
+      console.warn('GPU pose landmarker failed, falling back to CPU', {
+        message: gpuError?.message,
+        name: gpuError?.name,
+        stack: gpuError?.stack,
+        wasmUrl: WASM_URL,
+        modelUrl: POSE_MODEL_URL
       });
+      try {
+        return await PoseLandmarker.createFromOptions(vision, {
+          ...common,
+          baseOptions: {
+            modelAssetPath: POSE_MODEL_URL,
+            delegate: 'CPU'
+          }
+        });
+      } catch (cpuError) {
+        cpuError.message = [
+          cpuError?.message || 'Pose landmarker initialization failed.',
+          `GPU fallback reason: ${gpuError?.message || gpuError?.name || 'unknown'}`,
+          `Model URL: ${POSE_MODEL_URL}`
+        ].join(' ');
+        throw cpuError;
+      }
     }
   }
 

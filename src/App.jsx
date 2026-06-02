@@ -167,16 +167,16 @@ export default function App() {
     const bgm = new Audio(QUIZ_BGM_SRC);
     bgm.loop = true;
     bgm.volume = 0.28;
-    bgm.preload = 'auto';
+    bgm.preload = 'metadata';
     bgmRef.current = bgm;
     const tickTock = new Audio(TICK_TOCK_SOUND_SRC);
     tickTock.volume = 0.42;
-    tickTock.preload = 'auto';
+    tickTock.preload = 'metadata';
     tickTockRef.current = tickTock;
     const roundEnd = new Audio(ROUND_END_SOUND_SRC);
     roundEnd.volume = 0.5;
     roundEnd.playbackRate = 2;
-    roundEnd.preload = 'auto';
+    roundEnd.preload = 'metadata';
     roundEndRef.current = roundEnd;
 
     function unlockAudio() {

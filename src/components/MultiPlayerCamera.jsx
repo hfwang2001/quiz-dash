@@ -3,10 +3,9 @@ import { Camera, Lock, RefreshCcw, Unlock, VideoOff } from 'lucide-react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { classifyHandRaise, createMotionTracker, isUsable, POSE_EDGES } from '../shared/mocapMotion.js';
 
-const TASKS_VERSION = '0.10.35';
-const WASM_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VERSION}/wasm`;
-const POSE_MODEL_URL =
-  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task';
+const assetBaseUrl = new URL(import.meta.env.BASE_URL || './', window.location.href);
+const WASM_URL = new URL('mediapipe/wasm', assetBaseUrl).toString().replace(/\/$/, '');
+const POSE_MODEL_URL = new URL('mediapipe/models/pose_landmarker_full.task', assetBaseUrl).toString();
 
 const ACTION_TEXT = {
   left: '左手',
